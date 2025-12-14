@@ -6,6 +6,7 @@ import { prisma } from "../db.js";
 import { upload } from "../multer.js";
 import { upploadOnCloudinary } from "../cloudinary.config.js";
 import fs from "fs"
+import {v2 as cloudinary} from "cloudinary"
 
 export const sweetRouter = express.Router();
 
@@ -298,6 +299,79 @@ sweetRouter.put('/update/:id', authMiddleware, upload.single('image'), async (re
         return res.status(500).json({
             success: false,
             message: "Error updating sweet",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+sweetRouter.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+    try {
+        const sweetId = req.params.id;
+
+        //@ts-ignore
+        if (isNaN(sweetId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid sweet ID"
+            });
+        }
+
+        const existingSweet = await prisma.sweet.findUnique({
+            //@ts-ignore
+            where: { id: sweetId }
+        });
+
+        if (!existingSweet) {
+            return res.status(404).json({
+                success: false,
+                message: "Sweet not found"
+            });
+        }
+
+        if (!req.shopId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Shop ID is missing"
+            });
+        }
+
+        if (existingSweet.shopId !== req.shopId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You can only delete your own sweets"
+            });
+        }
+
+        if (existingSweet.image) {
+            try {
+                const urlParts = existingSweet.image.split('/');
+                const fileWithExtension = urlParts[urlParts.length - 1];
+                //@ts-ignore
+                const publicId = `sweets/${fileWithExtension.split('.')[0]}`;
+                
+                await cloudinary.uploader.destroy(publicId);
+                console.log("Image deleted from Cloudinary:", publicId);
+            } catch (cloudinaryError) {
+                console.error("Error deleting image from Cloudinary:", cloudinaryError);
+            }
+        }
+
+        await prisma.sweet.delete({
+            //@ts-ignore
+            where: { id: sweetId }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Sweet deleted successfully",
+            deletedId: sweetId
+        });
+
+    } catch (error) {
+        console.error('Delete error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Error deleting sweet",
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
