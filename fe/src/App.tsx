@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Register from './components/Register';
 import Login from './components/Login';
 import BuySweets from './components/BuySweets';
@@ -7,87 +7,128 @@ import RestockSweets from './components/RestockSweets';
 interface User {
   email: string;
   role: 'user' | 'admin';
-}
-
-interface Sweet {
-  id: number;
-  name: string;
-  price: number;
-  stock: number;
-  image: string;
+  id?: number;
+  name?: string;
 }
 
 function App() {
   const [view, setView] = useState<'login' | 'register'>('login');
   const [user, setUser] = useState<User | null>(null);
-  const [sweets, setSweets] = useState<Sweet[]>([
-    { id: 1, name: 'Chocolate Bar', price: 2.99, stock: 50, image: '🍫' },
-    { id: 2, name: 'Lollipop', price: 0.99, stock: 100, image: '🍭' },
-    { id: 3, name: 'Gummy Bears', price: 3.49, stock: 75, image: '🐻' },
-    { id: 4, name: 'Cotton Candy', price: 4.99, stock: 30, image: '🍬' },
-    { id: 5, name: 'Candy Cane', price: 1.49, stock: 60, image: '🍬' },
-    { id: 6, name: 'Jelly Beans', price: 2.79, stock: 90, image: '🫘' },
-  ]);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  const handleRegister = (email: string, password: string, role: 'user' | 'admin') => {
-    setUser({ email, role });
+  // Check for existing authentication on mount
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      const role = localStorage.getItem('role') as 'user' | 'admin' | null;
+      const userData = localStorage.getItem('userData');
+      const shopData = localStorage.getItem('shopData');
+
+      if (token && role) {
+        if (role === 'admin' && shopData) {
+          const shop = JSON.parse(shopData);
+          setUser({
+            email: shop.email,
+            role: 'admin',
+            id: shop.id,
+            name: shop.name,
+          });
+        } else if (role === 'user' && userData) {
+          const userInfo = JSON.parse(userData);
+          setUser({
+            email: userInfo.email,
+            role: 'user',
+            id: userInfo.id,
+          });
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  const handleRegisterSuccess = (token: string, userData: any, role: 'user' | 'admin') => {
+    if (role === 'admin') {
+      setUser({
+        email: userData.email,
+        role: 'admin',
+        id: userData.id,
+        name: userData.name,
+      });
+    } else {
+      setUser({
+        email: userData.email,
+        role: 'user',
+        id: userData.id,
+      });
+    }
   };
 
-  const handleLogin = (email: string, password: string) => {
-    setUser({ email, role: 'user' });
+  const handleLoginSuccess = (token: string, userData: any, role: 'user' | 'admin') => {
+    if (role === 'admin') {
+      setUser({
+        email: userData.email,
+        role: 'admin',
+        id: userData.id,
+        name: userData.name,
+      });
+    } else {
+      setUser({
+        email: userData.email,
+        role: 'user',
+        id: userData.id,
+      });
+    }
   };
 
   const handleLogout = () => {
+    // Clear all auth data
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('userData');
+    localStorage.removeItem('shopData');
+    
     setUser(null);
     setView('login');
   };
 
-  const handleBuy = (sweetId: number, quantity: number) => {
-    setSweets((prev) =>
-      prev.map((sweet) =>
-        sweet.id === sweetId ? { ...sweet, stock: sweet.stock - quantity } : sweet
-      )
+  // Show loading while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
+          <p className="text-xl font-semibold text-orange-500">Loading...</p>
+        </div>
+      </div>
     );
-  };
-
-  const handleRestock = (sweetId: number, quantity: number) => {
-    setSweets((prev) =>
-      prev.map((sweet) =>
-        sweet.id === sweetId ? { ...sweet, stock: sweet.stock + quantity } : sweet
-      )
-    );
-  };
-
-  const handleAddSweet = (name: string, price: number, stock: number, image: string) => {
-    const newSweet: Sweet = {
-      id: Math.max(...sweets.map((s) => s.id)) + 1,
-      name,
-      price,
-      stock,
-      image,
-    };
-    setSweets((prev) => [...prev, newSweet]);
-  };
-
-  if (!user) {
-    if (view === 'register') {
-      return <Register onRegister={handleRegister} onSwitchToLogin={() => setView('login')} />;
-    }
-    return <Login onLogin={handleLogin} onSwitchToRegister={() => setView('register')} />;
   }
 
-  if (user.role === 'admin') {
+  // Show auth screens if not logged in
+  if (!user) {
+    if (view === 'register') {
+      return (
+        <Register
+          onRegisterSuccess={handleRegisterSuccess}
+          onSwitchToLogin={() => setView('login')}
+        />
+      );
+    }
     return (
-      <RestockSweets
-        sweets={sweets}
-        onRestock={handleRestock}
-        onAddSweet={handleAddSweet}
-        onLogout={handleLogout}
+      <Login
+        onLoginSuccess={handleLoginSuccess}
+        onSwitchToRegister={() => setView('register')}
       />
     );
   }
 
-  return <BuySweets sweets={sweets} onBuy={handleBuy} onLogout={handleLogout} />;
+  // Show appropriate dashboard based on role
+  if (user.role === 'admin') {
+    return <RestockSweets onLogout={handleLogout} />;
+  }
+
+  return <BuySweets onLogout={handleLogout} />;
 }
 
 export default App;
