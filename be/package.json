@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsc -b && node dist/index.js",
     "test": "jest --passWithNoTests",
-    "build": "tsc -b"
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
