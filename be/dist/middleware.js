@@ -16,9 +16,21 @@ export const authMiddleware = (req, res, next) => {
             req.userId = decoded.userId;
         if (decoded.shopId)
             req.shopId = decoded.shopId;
+        if (decoded.role)
+            req.role = decoded.role;
+        next();
     }
     catch (error) {
         return res.status(401).json({ msg: "Invalid token" });
+    }
+};
+//@ts-ignore
+export const adminMiddleware = (req, res, next) => {
+    if (!req.role || req.role.toLocaleLowerCase() !== 'admin') {
+        return res.status(403).json({
+            success: false,
+            message: "Forbidden: Admin access required"
+        });
     }
     next();
 };

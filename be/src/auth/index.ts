@@ -37,7 +37,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
                 role: result.data.role
             }
         })
-        const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET || "")
+        const token = jwt.sign({ userId: newUser.id , role: newUser.role}, process.env.JWT_SECRET || "")
 
         return res.status(200).json({
             msg: "User created successfully",

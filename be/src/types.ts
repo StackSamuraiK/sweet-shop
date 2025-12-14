@@ -30,3 +30,10 @@ export const SweetSchema = zod.object({
     quantity: zod.number()
 })
 
+export const RestockSchema = zod.object({
+    quantity: zod.coerce.number().int().positive("Quantity must be a positive number")
+});
+
+export const PurchaseSchema = zod.object({
+    quantity: zod.coerce.number().int().positive("Quantity must be a positive number")
+});

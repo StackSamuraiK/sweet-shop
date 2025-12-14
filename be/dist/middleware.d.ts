@@ -1,3 +1,4 @@
 import type { NextFunction, Response, Request } from "express";
 export declare const authMiddleware: (req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
+export declare const adminMiddleware: (req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
 //# sourceMappingURL=middleware.d.ts.map

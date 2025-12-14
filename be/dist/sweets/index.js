@@ -1,10 +1,11 @@
 import express from "express";
-import { authMiddleware } from "../middleware.js";
-import { SweetSchema } from "../types.js";
+import { adminMiddleware, authMiddleware } from "../middleware.js";
+import { PurchaseSchema, RestockSchema, SweetSchema } from "../types.js";
 import { prisma } from "../db.js";
 import { upload } from "../multer.js";
 import { upploadOnCloudinary } from "../cloudinary.config.js";
 import fs from "fs";
+import { v2 as cloudinary } from "cloudinary";
 export const sweetRouter = express.Router();
 //@ts-ignore
 sweetRouter.post('/add', authMiddleware, upload.single('image'), async (req, res) => {
@@ -159,6 +160,188 @@ sweetRouter.get('/search', async (req, res) => {
         });
     }
 });
+sweetRouter.post('/:id/restock', authMiddleware, adminMiddleware, async (req, res) => {
+    try {
+        if (!req.params.id) {
+            return res.status(400).json({
+                success: false,
+                message: "Sweet ID is required"
+            });
+        }
+        const sweetId = parseInt(req.params.id);
+        if (isNaN(sweetId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid sweet ID"
+            });
+        }
+        const result = RestockSchema.safeParse(req.body);
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation error",
+                errors: result.error
+            });
+        }
+        const { quantity } = result.data;
+        const existingSweet = await prisma.sweet.findUnique({
+            where: { id: sweetId },
+            include: {
+                shop: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
+        });
+        if (!existingSweet) {
+            return res.status(404).json({
+                success: false,
+                message: "Sweet not found"
+            });
+        }
+        const updatedSweet = await prisma.sweet.update({
+            where: { id: sweetId },
+            data: {
+                quantity: {
+                    increment: quantity
+                }
+            },
+            include: {
+                shop: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }
+            }
+        });
+        return res.status(200).json({
+            success: true,
+            message: `Successfully restocked ${quantity} units`,
+            sweet: updatedSweet,
+            previousQuantity: existingSweet.quantity,
+            newQuantity: updatedSweet.quantity,
+            restockedAmount: quantity
+        });
+    }
+    catch (error) {
+        console.error('Restock error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Error restocking sweet",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+// Purchase endpoint - decreases quantity
+sweetRouter.post('/:id/purchase', authMiddleware, async (req, res) => {
+    try {
+        // Validate sweet ID
+        if (!req.params.id) {
+            return res.status(400).json({
+                success: false,
+                message: "Sweet ID is required"
+            });
+        }
+        const sweetId = parseInt(req.params.id);
+        if (isNaN(sweetId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid sweet ID"
+            });
+        }
+        // Validate request body
+        const result = PurchaseSchema.safeParse(req.body);
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation error",
+                errors: result.error
+            });
+        }
+        const { quantity } = result.data;
+        // Check if sweet exists
+        const existingSweet = await prisma.sweet.findUnique({
+            where: { id: sweetId },
+            include: {
+                shop: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }
+            }
+        });
+        if (!existingSweet) {
+            return res.status(404).json({
+                success: false,
+                message: "Sweet not found"
+            });
+        }
+        // Check if enough quantity is available
+        if (existingSweet.quantity < quantity) {
+            return res.status(400).json({
+                success: false,
+                message: `Insufficient quantity. Only ${existingSweet.quantity} units available`,
+                availableQuantity: existingSweet.quantity,
+                requestedQuantity: quantity
+            });
+        }
+        // Check if sweet is in stock
+        if (existingSweet.quantity === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Sweet is out of stock"
+            });
+        }
+        // Decrease the quantity
+        const updatedSweet = await prisma.sweet.update({
+            where: { id: sweetId },
+            data: {
+                quantity: {
+                    decrement: quantity
+                }
+            },
+            include: {
+                shop: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }
+            }
+        });
+        // Calculate total price
+        const totalPrice = existingSweet.price * quantity;
+        return res.status(200).json({
+            success: true,
+            message: `Successfully purchased ${quantity} unit(s)`,
+            purchase: {
+                sweet: {
+                    id: updatedSweet.id,
+                    name: updatedSweet.name,
+                    category: updatedSweet.category,
+                    pricePerUnit: updatedSweet.price,
+                    image: updatedSweet.image
+                },
+                quantityPurchased: quantity,
+                totalPrice: totalPrice,
+                previousQuantity: existingSweet.quantity,
+                remainingQuantity: updatedSweet.quantity
+            }
+        });
+    }
+    catch (error) {
+        console.error('Purchase error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Error processing purchase",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
 sweetRouter.put('/update/:id', authMiddleware, upload.single('image'), async (req, res) => {
     try {
         const sweetId = req.params.id;
@@ -256,6 +439,75 @@ sweetRouter.put('/update/:id', authMiddleware, upload.single('image'), async (re
         return res.status(500).json({
             success: false,
             message: "Error updating sweet",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+sweetRouter.delete('/delete/:id', authMiddleware, async (req, res) => {
+    try {
+        if (!req.params.id) {
+            return res.status(400).json({
+                success: false,
+                message: "Sweet ID is required"
+            });
+        }
+        const sweetId = parseInt(req.params.id);
+        if (isNaN(sweetId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid sweet ID"
+            });
+        }
+        const existingSweet = await prisma.sweet.findUnique({
+            //@ts-ignore
+            where: { id: sweetId }
+        });
+        if (!existingSweet) {
+            return res.status(404).json({
+                success: false,
+                message: "Sweet not found"
+            });
+        }
+        if (!req.shopId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Shop ID is missing"
+            });
+        }
+        if (existingSweet.shopId !== req.shopId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You can only delete your own sweets"
+            });
+        }
+        if (existingSweet.image) {
+            try {
+                const urlParts = existingSweet.image.split('/');
+                const fileWithExtension = urlParts[urlParts.length - 1];
+                //@ts-ignore
+                const publicId = `sweets/${fileWithExtension.split('.')[0]}`;
+                await cloudinary.uploader.destroy(publicId);
+                console.log("Image deleted from Cloudinary:", publicId);
+            }
+            catch (cloudinaryError) {
+                console.error("Error deleting image from Cloudinary:", cloudinaryError);
+            }
+        }
+        await prisma.sweet.delete({
+            //@ts-ignore
+            where: { id: sweetId }
+        });
+        return res.status(200).json({
+            success: true,
+            message: "Sweet deleted successfully",
+            deletedId: sweetId
+        });
+    }
+    catch (error) {
+        console.error('Delete error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Error deleting sweet",
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }

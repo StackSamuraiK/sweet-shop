@@ -30,4 +30,10 @@ export declare const SweetSchema: zod.ZodObject<{
     price: zod.ZodNumber;
     quantity: zod.ZodNumber;
 }, zod.z.core.$strip>;
+export declare const RestockSchema: zod.ZodObject<{
+    quantity: zod.z.ZodCoercedNumber<unknown>;
+}, zod.z.core.$strip>;
+export declare const PurchaseSchema: zod.ZodObject<{
+    quantity: zod.z.ZodCoercedNumber<unknown>;
+}, zod.z.core.$strip>;
 //# sourceMappingURL=types.d.ts.map

@@ -33,7 +33,7 @@ shopRouter.post('/register', async (req, res) => {
                 email: result.data.email
             }
         });
-        const token = jwt.sign({ shopId: newShop.id }, process.env.JWT_SECRET || "");
+        const token = jwt.sign({ shopId: newShop.id, role: newShop.role }, process.env.JWT_SECRET || "");
         return res.status(200).json({
             msg: "Shop registered successfully",
             shop: newShop,

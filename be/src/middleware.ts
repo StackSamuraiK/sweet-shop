@@ -21,9 +21,23 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
         const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as AuthPayLoad
         if (decoded.userId) req.userId = decoded.userId;
         if (decoded.shopId) req.shopId = decoded.shopId;
+        if (decoded.role) req.role = decoded.role;
+
+        next();
 
     } catch (error) {
         return res.status(401).json({ msg: "Invalid token" });
     }
-    next()
 }
+
+
+//@ts-ignore
+    export const adminMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.role || req.role.toLocaleLowerCase() !== 'admin') {
+        return res.status(403).json({
+            success: false,
+            message: "Forbidden: Admin access required"
+        });
+    }
+    next();
+};
