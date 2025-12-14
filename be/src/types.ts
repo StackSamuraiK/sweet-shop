@@ -27,7 +27,6 @@ export const SweetSchema = zod.object({
     name: zod.string(),
     category: zod.string(),
     price: zod.number(),
-    image: zod.string(),
     quantity: zod.number()
 })
 

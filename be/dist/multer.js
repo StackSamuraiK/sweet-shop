@@ -1,12 +1,10 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-
 const uploadDir = './uploads';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-
 const storage = multer.diskStorage({
     //@ts-ignore
     destination: function (req, file, cb) {
@@ -19,20 +17,18 @@ const storage = multer.diskStorage({
         cb(null, file.fieldname + '-' + uniqueSuffix + ext);
     }
 });
-
 //@ts-ignore
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-
     if (mimetype && extname) {
         return cb(null, true);
-    } else {
+    }
+    else {
         cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed!'));
     }
 };
-
 export const upload = multer({
     storage: storage,
     limits: {
@@ -40,3 +36,4 @@ export const upload = multer({
     },
     fileFilter: fileFilter
 });
+//# sourceMappingURL=multer.js.map

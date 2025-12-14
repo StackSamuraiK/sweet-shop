@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, {} from "jsonwebtoken";
 //@ts-ignore
 export const authMiddleware = (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -11,10 +11,15 @@ export const authMiddleware = (req, res, next) => {
     if (!token)
         return res.json({ msg: "Token is missing" });
     try {
-        //@ts-ignore
         const decoded = jwt.verify(token, process.env.JWT_SECRET || "");
+        if (decoded.userId)
+            req.userId = decoded.userId;
+        if (decoded.shopId)
+            req.shopId = decoded.shopId;
     }
     catch (error) {
+        return res.status(401).json({ msg: "Invalid token" });
     }
+    next();
 };
 //# sourceMappingURL=middleware.js.map

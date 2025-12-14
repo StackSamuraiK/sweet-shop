@@ -28,7 +28,6 @@ export declare const SweetSchema: zod.ZodObject<{
     name: zod.ZodString;
     category: zod.ZodString;
     price: zod.ZodNumber;
-    image: zod.ZodString;
     quantity: zod.ZodNumber;
 }, zod.z.core.$strip>;
 //# sourceMappingURL=types.d.ts.map

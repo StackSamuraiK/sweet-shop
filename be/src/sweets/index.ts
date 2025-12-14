@@ -5,37 +5,106 @@ import { SweetSchema } from "../types.js";
 import { prisma } from "../db.js";
 import { upload } from "../multer.js";
 import { upploadOnCloudinary } from "../cloudinary.config.js";
+import fs from "fs"
 
 export const sweetRouter = express.Router();
 
 //@ts-ignore
-sweetRouter.post('/add', authMiddleware,upload.single('image'),async(req:Request, res:Response)=>{
-    const result = SweetSchema.safeParse(req.body)
+sweetRouter.post('/add', authMiddleware, upload.single('image'), async(req: Request, res: Response) => {
     try {
-        //upload the image to cloudinary
-        const response = await upploadOnCloudinary(result.data?.image)
-        //get the url and store it in result.data.image
-        const url = response?.url
-        if(!req.shopId) return res.send("req.shopId is missing");
-        const sweet = await prisma.sweet.create({
-            data:{
-                shopId: req.shopId,
-                name: result.data?.name || "",
-                category: result.data?.category || "",
-                price: result.data?.price || 0.00,
-                image: url || "",
-                quantity: result.data?.quantity || 0,
-            }
-        })
+        console.log("Request received");
+        console.log("shopId:", req.shopId);
+        console.log("file:", req.file?.filename);
+        console.log("body:", req.body);
 
-        return res.status(200).json({
-            msg: "Sweet created successfully",
-            sweet: sweet
-        })
-    } catch (error) {
+        if (!req.shopId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Shop ID is missing"
+            });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "Image file is required"
+            });
+        }
+
+        const bodyData = {
+            name: req.body.name,
+            category: req.body.category,
+            price: parseFloat(req.body.price),
+            quantity: parseInt(req.body.quantity)
+        };
+
+        console.log("Parsed body data:", bodyData);
+
+        const result = SweetSchema.safeParse(bodyData);
         
+        if (!result.success) {
+            console.log("Validation failed:", result.error);
+            if (req.file.path && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+            return res.status(400).json({
+                success: false,
+                message: "Validation error",
+                errors: result.error
+            });
+        }
+
+        console.log("Validation passed, uploading to Cloudinary...");
+
+        const cloudinaryResponse = await upploadOnCloudinary(req.file.path);
+        
+        if (!cloudinaryResponse || !cloudinaryResponse.url) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to upload image to Cloudinary"
+            });
+        }
+
+        console.log("Image uploaded:", cloudinaryResponse.url);
+
+        const sweet = await prisma.sweet.create({
+            data: {
+                shopId: req.shopId,
+                name: result.data.name,
+                category: result.data.category,
+                price: result.data.price,
+                image: cloudinaryResponse.url,
+                quantity: result.data.quantity,
+            }
+        });
+
+        console.log("Sweet created:", sweet.id);
+
+        return res.status(201).json({
+            success: true,
+            message: "Sweet created successfully",
+            sweet: sweet
+        });
+
+    } catch (error) {
+        console.error('Error creating sweet:', error);
+        
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (unlinkError) {
+                console.error('Error cleaning up file:', unlinkError);
+            }
+        }
+        
+        return res.status(500).json({
+            success: false,
+            message: "Error creating sweet",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
-})
+});
+
 
 //@ts-ignore
 sweetRouter.get('/bulk', authMiddleware,async(req:Request, res:Response)=>{
